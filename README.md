@@ -138,13 +138,3 @@ npm run start
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
-
-- [PokéAPI](https://pokeapi.co/) for providing comprehensive Pokémon data
-- [The Pokémon Company](https://www.pokemon.com/) for the amazing Pokémon universe
-- [Next.js](https://nextjs.org/) team for the excellent React framework
-- [Tailwind CSS](https://tailwindcss.com/) for the utility-first CSS framework
-
----
-
-**Built with ❤️ by [Your Name](https://github.com/yourusername)**
