@@ -30,14 +30,14 @@ export default function TypeFilter({ selectedType, onTypeSelect }: TypeFilterPro
 
   return (
     <div className="mb-6">
-      <h3 className="text-lg font-semibold text-gray-700 mb-3">Filter by Type:</h3>
+      <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-3">Filter by Type:</h3>
       <div className="flex flex-wrap gap-2">
         <button
           onClick={() => onTypeSelect(null)}
           className={`px-3 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
             selectedType === null
-              ? 'bg-gray-800 text-white shadow-lg'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              ? 'bg-gray-800 dark:bg-gray-600 text-white shadow-lg'
+              : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'
           }`}
         >
           All Types

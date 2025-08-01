@@ -4,17 +4,18 @@ import { useState, useEffect } from 'react';
 import { Pokemon } from '@/types/pokemon';
 import { pokemonApi } from '@/services/pokemon';
 import PokemonCard from './PokemonCard';
+import PokemonModal from './PokemonModal';
 
 interface PokemonGridProps {
   searchQuery?: string;
   selectedType?: string | null;
-  onPokemonSelect?: (pokemon: Pokemon | null) => void;
 }
 
-export default function PokemonGrid({ searchQuery, selectedType, onPokemonSelect }: PokemonGridProps) {
+export default function PokemonGrid({ searchQuery, selectedType }: PokemonGridProps) {
   const [pokemon, setPokemon] = useState<Pokemon[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedPokemon, setSelectedPokemon] = useState<Pokemon | null>(null);
   const [loadMore, setLoadMore] = useState(false);
   const [offset, setOffset] = useState(0);
   const limit = 20;
@@ -64,7 +65,11 @@ export default function PokemonGrid({ searchQuery, selectedType, onPokemonSelect
   };
 
   const handlePokemonClick = (pokemon: Pokemon) => {
-    onPokemonSelect?.(pokemon);
+    setSelectedPokemon(pokemon);
+  };
+
+  const handleCloseModal = () => {
+    setSelectedPokemon(null);
   };
 
   const filteredPokemon = selectedType
@@ -123,6 +128,13 @@ export default function PokemonGrid({ searchQuery, selectedType, onPokemonSelect
             )}
           </button>
         </div>
+      )}
+
+      {selectedPokemon && (
+        <PokemonModal 
+          pokemon={selectedPokemon} 
+          onClose={handleCloseModal} 
+        />
       )}
     </div>
   );

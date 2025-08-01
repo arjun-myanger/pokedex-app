@@ -1,4 +1,4 @@
-import { Pokemon, PokemonListResponse, PokemonSpecies } from '@/types/pokemon';
+import { Pokemon, PokemonListResponse, PokemonSpecies, LocationArea, PokemonLocationInfo } from '@/types/pokemon';
 
 const BASE_URL = 'https://pokeapi.co/api/v2';
 
@@ -51,6 +51,120 @@ export const pokemonApi = {
       
       return Promise.all(pokemonPromises);
     }
+  },
+
+  async getPokemonLocationAreas(pokemonId: number): Promise<LocationArea[]> {
+    const response = await fetch(`${BASE_URL}/pokemon/${pokemonId}/encounters`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch location data for Pokemon ID: ${pokemonId}`);
+    }
+    const locationAreaUrls = await response.json();
+    
+    const locationPromises = locationAreaUrls.map(async (encounter: { location_area: { url: string } }) => {
+      const areaResponse = await fetch(encounter.location_area.url);
+      if (!areaResponse.ok) return null;
+      return areaResponse.json();
+    });
+    
+    const locations = await Promise.all(locationPromises);
+    return locations.filter(Boolean);
+  },
+
+  async getPokemonLocations(pokemonId: number): Promise<PokemonLocationInfo[]> {
+    try {
+      const locationAreas = await this.getPokemonLocationAreas(pokemonId);
+      const pokemon = await this.getPokemonById(pokemonId);
+      const locationInfo: PokemonLocationInfo[] = [];
+
+      for (const area of locationAreas) {
+        const pokemonEncounter = area.pokemon_encounters.find(
+          encounter => encounter.pokemon.name === pokemon.name
+        );
+
+        if (pokemonEncounter) {
+          for (const versionDetail of pokemonEncounter.version_details) {
+            for (const encounterDetail of versionDetail.encounter_details) {
+              locationInfo.push({
+                locationName: this.formatLocationName(area.location.name),
+                areaName: this.formatLocationName(area.name),
+                method: this.formatMethodName(encounterDetail.method.name),
+                chance: encounterDetail.chance,
+                minLevel: encounterDetail.min_level,
+                maxLevel: encounterDetail.max_level,
+                versions: [this.formatVersionName(versionDetail.version.name)]
+              });
+            }
+          }
+        }
+      }
+
+      return this.consolidateLocationInfo(locationInfo);
+    } catch (error) {
+      console.error('Failed to fetch location data:', error);
+      return [];
+    }
+  },
+
+  formatLocationName(name: string): string {
+    return name.split('-').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+  },
+
+  formatMethodName(method: string): string {
+    const methodMap: { [key: string]: string } = {
+      'walk': '🌱 Walking',
+      'surf': '🌊 Surfing',
+      'old-rod': '🎣 Old Rod',
+      'good-rod': '🎣 Good Rod',
+      'super-rod': '🎣 Super Rod',
+      'rock-smash': '🪨 Rock Smash',
+      'headbutt': '🌳 Headbutt',
+      'gift': '🎁 Gift',
+      'only-one': '⭐ Event'
+    };
+    return methodMap[method] || `📍 ${this.formatLocationName(method)}`;
+  },
+
+  formatVersionName(version: string): string {
+    const versionMap: { [key: string]: string } = {
+      'diamond': 'Diamond',
+      'pearl': 'Pearl',
+      'platinum': 'Platinum',
+      'heartgold': 'HeartGold',
+      'soulsilver': 'SoulSilver',
+      'black': 'Black',
+      'white': 'White',
+      'black-2': 'Black 2',
+      'white-2': 'White 2',
+      'x': 'X',
+      'y': 'Y',
+      'omega-ruby': 'Omega Ruby',
+      'alpha-sapphire': 'Alpha Sapphire',
+      'sun': 'Sun',
+      'moon': 'Moon',
+      'ultra-sun': 'Ultra Sun',
+      'ultra-moon': 'Ultra Moon',
+      'sword': 'Sword',
+      'shield': 'Shield'
+    };
+    return versionMap[version] || version.charAt(0).toUpperCase() + version.slice(1);
+  },
+
+  consolidateLocationInfo(locations: PokemonLocationInfo[]): PokemonLocationInfo[] {
+    const consolidated: { [key: string]: PokemonLocationInfo } = {};
+
+    locations.forEach(loc => {
+      const key = `${loc.locationName}-${loc.method}-${loc.minLevel}-${loc.maxLevel}`;
+      if (consolidated[key]) {
+        consolidated[key].versions = [...new Set([...consolidated[key].versions, ...loc.versions])];
+        consolidated[key].chance = Math.max(consolidated[key].chance, loc.chance);
+      } else {
+        consolidated[key] = { ...loc };
+      }
+    });
+
+    return Object.values(consolidated).sort((a, b) => b.chance - a.chance);
   }
 };
 

@@ -33,12 +33,12 @@ export default function PokemonCard({ pokemon, onClick }: PokemonCardProps) {
 
   return (
     <div 
-      className="bg-white rounded-2xl shadow-lg overflow-hidden cursor-pointer transform transition-all duration-200 hover:scale-105 hover:shadow-xl"
+      className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden cursor-pointer transform transition-all duration-200 hover:scale-105 hover:shadow-xl"
       style={{ borderTop: `4px solid ${typeColor}` }}
       onClick={() => onClick?.(pokemon)}
     >
-      <div className="relative bg-gradient-to-br from-gray-50 to-gray-100 p-4">
-        <div className="text-xs font-bold text-gray-500 mb-1">
+      <div className="relative bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-600 p-4">
+        <div className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">
           {formatPokemonId(pokemon.id)}
         </div>
         <div className="relative w-24 h-24 mx-auto">
@@ -54,7 +54,7 @@ export default function PokemonCard({ pokemon, onClick }: PokemonCardProps) {
       </div>
       
       <div className="p-4">
-        <h3 className="text-lg font-bold text-gray-800 mb-2 text-center">
+        <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-2 text-center">
           {capitalizeFirstLetter(pokemon.name)}
         </h3>
         
@@ -77,7 +77,7 @@ export default function PokemonCard({ pokemon, onClick }: PokemonCardProps) {
           })}
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-600">
+        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-300">
           <div className="text-center">
             <div className="font-semibold">Height</div>
             <div>{(pokemon.height / 10).toFixed(1)}m</div>
