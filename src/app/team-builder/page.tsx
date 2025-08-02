@@ -20,22 +20,22 @@ export default function TeamBuilderPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-slate-800 transition-colors">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className={`container mx-auto px-4 py-8 transition-all duration-300 ${selectedPokemon ? 'blur-sm' : ''}`}>
         <header className="text-center mb-8">
           <Link 
             href="/"
-            className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mb-4 transition-colors"
+            className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-4 transition-colors"
           >
             <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
             Back to Pokedex
           </Link>
-          <h1 className="text-4xl font-bold text-gray-800 dark:text-white mb-2">
+          <h1 className="text-4xl font-bold text-gray-800 mb-2">
             Team Builder
           </h1>
-          <p className="text-gray-600 dark:text-gray-300 text-lg">
+          <p className="text-gray-600 text-lg">
             Build your perfect Pokemon team and analyze its strengths and weaknesses!
           </p>
         </header>

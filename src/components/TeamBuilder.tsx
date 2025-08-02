@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { Pokemon } from '@/types/pokemon';
 import { pokemonTypeColors } from '@/services/pokemon';
-import { analyzeTeamWeaknesses, TeamWeaknessAnalysis } from '@/utils/typeEffectiveness';
+import { analyzeTeamWeaknesses } from '@/utils/typeEffectiveness';
+import { teamRecommendationService, PokemonRecommendation } from '@/services/teamRecommendations';
 import Image from 'next/image';
 import PokemonSelector from './PokemonSelector';
 
@@ -16,11 +17,39 @@ interface TeamSlot {
   pokemon: Pokemon | null;
 }
 
+interface TeamAnalysisData {
+  criticalWeaknesses?: Array<{
+    type: string;
+    count: number;
+    pokemon?: string[];
+  }>;
+  resistances?: Array<{
+    type: string;
+    count: number;
+  }>;
+  coverageGaps?: string[];
+  recommendations?: string[];
+  overallTeamScore?: number;
+  teamGrade?: string;
+  teamArchetype?: string;
+  defensiveRating?: number;
+  offensiveRating?: number;
+  coreStrength?: number;
+  teamStrengths?: string[];
+  teamWeaknesses?: string[];
+  // Legacy properties from old analysis system
+  affectedPokemon?: string[];
+  resistanceTypes?: string[];
+  weaknessTypes?: string[];
+}
+
 export default function TeamBuilder({ onPokemonSelect }: TeamBuilderProps) {
   const [team, setTeam] = useState<TeamSlot[]>(() => 
     Array.from({ length: 6 }, () => ({ pokemon: null }))
   );
-  const [analysis, setAnalysis] = useState<TeamWeaknessAnalysis | null>(null);
+  const [analysis, setAnalysis] = useState<TeamAnalysisData | null>(null);
+  const [recommendations, setRecommendations] = useState<PokemonRecommendation[]>([]);
+  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
 
@@ -63,22 +92,70 @@ export default function TeamBuilder({ onPokemonSelect }: TeamBuilderProps) {
     const emptyTeam = Array.from({ length: 6 }, () => ({ pokemon: null }));
     setTeam(emptyTeam);
     setAnalysis(null);
+    setRecommendations([]);
   };
 
-  const updateAnalysis = (currentTeam: TeamSlot[]) => {
+  const handleRecommendationClick = (recommendation: PokemonRecommendation) => {
+    if (recommendation.type === 'add') {
+      // Find first empty slot
+      const emptySlotIndex = team.findIndex(slot => slot.pokemon === null);
+      if (emptySlotIndex !== -1) {
+        addPokemonToTeam(recommendation.pokemon, emptySlotIndex);
+      }
+    } else if (recommendation.type === 'swap' && recommendation.swapSlot !== undefined) {
+      addPokemonToTeam(recommendation.pokemon, recommendation.swapSlot);
+    }
+  };
+
+  const updateAnalysis = async (currentTeam: TeamSlot[]) => {
     const teamPokemon = currentTeam
       .filter(slot => slot.pokemon !== null)
-      .map(slot => ({
-        name: slot.pokemon!.name,
-        types: slot.pokemon!.types.map(t => t.type.name)
-      }));
-
+      .map(slot => slot.pokemon!);
 
     if (teamPokemon.length > 0) {
-      const newAnalysis = analyzeTeamWeaknesses(teamPokemon);
-      setAnalysis(newAnalysis);
+      try {
+        // For now, use only the legacy analysis to avoid errors
+        const simpleTeamPokemon = teamPokemon.map(pokemon => ({
+          name: pokemon.name,
+          types: pokemon.types.map(t => t.type.name)
+        }));
+        const legacyAnalysis = analyzeTeamWeaknesses(simpleTeamPokemon);
+        
+        // Try to get the new analysis but don't fail if it errors
+        try {
+          const fullAnalysis = await teamRecommendationService.getTeamAnalysis(teamPokemon);
+          const combinedAnalysis = {
+            ...legacyAnalysis,
+            ...fullAnalysis
+          };
+          setAnalysis(combinedAnalysis);
+        } catch (error) {
+          console.error('Error getting full team analysis:', error);
+          setAnalysis(legacyAnalysis);
+        }
+      } catch (error) {
+        console.error('Error in updateAnalysis:', error);
+        setAnalysis(null);
+      }
+      
+      // Get recommendations
+      await updateRecommendations(currentTeam);
     } else {
       setAnalysis(null);
+      setRecommendations([]);
+    }
+  };
+
+  const updateRecommendations = async (currentTeam: TeamSlot[]) => {
+    try {
+      setLoadingRecommendations(true);
+      const newRecommendations = await teamRecommendationService.getTeamRecommendations(currentTeam, 6);
+      setRecommendations(newRecommendations);
+    } catch (error) {
+      console.error('Failed to get recommendations:', error);
+      setRecommendations([]);
+    } finally {
+      setLoadingRecommendations(false);
     }
   };
 
@@ -104,6 +181,96 @@ export default function TeamBuilder({ onPokemonSelect }: TeamBuilderProps) {
           Build your team of up to 6 Pokemon and analyze their type effectiveness. Click on empty slots to add Pokemon!
         </p>
       </div>
+
+      {/* Team Score Display */}
+      {analysis && typeof analysis.overallTeamScore === 'number' && (
+        <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl p-6 text-white mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-2xl font-bold mb-1">Team Score</h3>
+              <p className="text-blue-100 text-sm">Overall team effectiveness rating</p>
+            </div>
+            <div className="text-right">
+              <div className="flex items-center gap-3">
+                <div className="text-4xl font-bold">{analysis.overallTeamScore || 0}</div>
+                <div className="text-6xl font-bold opacity-90">{analysis.teamGrade || 'F'}</div>
+              </div>
+              <div className="text-blue-100 text-sm mt-1">
+                {analysis.teamArchetype && analysis.teamArchetype !== 'undefined' ? 
+                  `${analysis.teamArchetype.charAt(0).toUpperCase() + analysis.teamArchetype.slice(1)} Team` : 
+                  'Team Strategy'
+                }
+              </div>
+            </div>
+          </div>
+          
+          {/* Team Ratings Bar */}
+          <div className="mt-4 grid grid-cols-3 gap-4">
+            <div>
+              <div className="flex justify-between text-sm mb-1">
+                <span>Defense</span>
+                <span>{Math.round(analysis.defensiveRating || 0)}</span>
+              </div>
+              <div className="w-full bg-blue-400/30 rounded-full h-2">
+                <div 
+                  className="bg-white h-2 rounded-full transition-all duration-500" 
+                  style={{ width: `${Math.round(analysis.defensiveRating || 0)}%` }}
+                ></div>
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-sm mb-1">
+                <span>Offense</span>
+                <span>{Math.round(analysis.offensiveRating || 0)}</span>
+              </div>
+              <div className="w-full bg-blue-400/30 rounded-full h-2">
+                <div 
+                  className="bg-white h-2 rounded-full transition-all duration-500" 
+                  style={{ width: `${Math.round(analysis.offensiveRating || 0)}%` }}
+                ></div>
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-sm mb-1">
+                <span>Synergy</span>
+                <span>{Math.round(analysis.coreStrength || 0)}</span>
+              </div>
+              <div className="w-full bg-blue-400/30 rounded-full h-2">
+                <div 
+                  className="bg-white h-2 rounded-full transition-all duration-500" 
+                  style={{ width: `${Math.round(analysis.coreStrength || 0)}%` }}
+                ></div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Team Strengths and Weaknesses */}
+          {((analysis.teamStrengths && analysis.teamStrengths.length > 0) || (analysis.teamWeaknesses && analysis.teamWeaknesses.length > 0)) && (
+            <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {analysis.teamStrengths && analysis.teamStrengths.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-sm mb-2 text-green-200">✨ Team Strengths</h4>
+                  <ul className="text-sm space-y-1">
+                    {analysis.teamStrengths.slice(0, 2).map((strength: string, index: number) => (
+                      <li key={index} className="text-blue-100">• {strength}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {analysis.teamWeaknesses && analysis.teamWeaknesses.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-sm mb-2 text-red-200">⚠️ Areas to Improve</h4>
+                  <ul className="text-sm space-y-1">
+                    {analysis.teamWeaknesses.slice(0, 2).map((weakness: string, index: number) => (
+                      <li key={index} className="text-blue-100">• {weakness}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Team Actions */}
       <div className="flex items-center justify-between mb-4">
@@ -197,7 +364,7 @@ export default function TeamBuilder({ onPokemonSelect }: TeamBuilderProps) {
             {/* Critical Weaknesses */}
             <div>
               <h4 className="text-lg font-semibold text-red-700 dark:text-red-400 mb-3">⚠️ Critical Weaknesses</h4>
-              {analysis.criticalWeaknesses.length > 0 ? (
+              {analysis.criticalWeaknesses && analysis.criticalWeaknesses.length > 0 ? (
                 <div className="space-y-3">
                   {analysis.criticalWeaknesses.map((weakness) => (
                     <div key={weakness.type} className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3">
@@ -213,7 +380,7 @@ export default function TeamBuilder({ onPokemonSelect }: TeamBuilderProps) {
                         </span>
                       </div>
                       <p className="text-xs text-gray-600 dark:text-gray-300">
-                        Affects: {weakness.affectedPokemon.map(name => capitalizeFirstLetter(name)).join(', ')}
+                        Affects: {weakness.pokemon?.map((name: string) => capitalizeFirstLetter(name)).join(', ') || 'Unknown'}
                       </p>
                     </div>
                   ))}
@@ -228,7 +395,7 @@ export default function TeamBuilder({ onPokemonSelect }: TeamBuilderProps) {
             {/* Team Resistances */}
             <div>
               <h4 className="text-lg font-semibold text-green-700 dark:text-green-400 mb-3">✅ Strong Resistances</h4>
-              {analysis.resistances.length > 0 ? (
+              {analysis.resistances && analysis.resistances.length > 0 ? (
                 <div className="space-y-2">
                   {analysis.resistances.slice(0, 5).map((resistance) => (
                     <div key={resistance.type} className="bg-green-50 dark:bg-green-900/20 rounded-lg p-2">
@@ -252,13 +419,13 @@ export default function TeamBuilder({ onPokemonSelect }: TeamBuilderProps) {
             </div>
 
             {/* Coverage Gaps */}
-            {analysis.coverageGaps.length > 0 && (
+            {analysis.coverageGaps && analysis.coverageGaps.length > 0 && (
               <div className="lg:col-span-2">
                 <h4 className="text-lg font-semibold text-orange-700 dark:text-orange-400 mb-3">🔧 Coverage Gaps</h4>
                 <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-3">
                   <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">Your team lacks super effective coverage against:</p>
                   <div className="flex flex-wrap gap-1">
-                    {analysis.coverageGaps.slice(0, 8).map(type => (
+                    {analysis.coverageGaps.slice(0, 8).map((type: string) => (
                       <span
                         key={type}
                         className="px-2 py-1 rounded-full text-xs font-medium text-white opacity-75"
@@ -278,11 +445,11 @@ export default function TeamBuilder({ onPokemonSelect }: TeamBuilderProps) {
             )}
 
             {/* Recommendations */}
-            {analysis.recommendations.length > 0 && (
+            {analysis.recommendations && analysis.recommendations.length > 0 && (
               <div className="lg:col-span-2">
                 <h4 className="text-lg font-semibold text-blue-700 dark:text-blue-400 mb-3">💡 Recommendations</h4>
                 <div className="space-y-2">
-                  {analysis.recommendations.map((recommendation, index) => (
+                  {analysis.recommendations.map((recommendation: string, index: number) => (
                     <div key={index} className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
                       <p className="text-sm text-gray-700 dark:text-gray-300">{recommendation}</p>
                     </div>
@@ -291,6 +458,106 @@ export default function TeamBuilder({ onPokemonSelect }: TeamBuilderProps) {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Team Recommendations */}
+      {recommendations.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+          <h3 className="text-xl font-semibold text-gray-800 dark:text-white mb-4">
+            💡 Recommended Pokemon
+          </h3>
+          <p className="text-gray-600 dark:text-gray-300 mb-4">
+            Based on your team&apos;s analysis, here are some Pokemon that could improve your team:
+          </p>
+          
+          {loadingRecommendations ? (
+            <div className="flex justify-center items-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              <span className="ml-2 text-gray-600 dark:text-gray-300">Finding recommendations...</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {recommendations.map((recommendation, index) => (
+                <div
+                  key={`${recommendation.pokemon.id}-${index}`}
+                  className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer border-2 border-transparent hover:border-blue-300 dark:hover:border-blue-600"
+                  onClick={() => handleRecommendationClick(recommendation)}
+                >
+                  <div className="flex items-center mb-3">
+                    <div className="relative w-12 h-12 mr-3">
+                      <Image
+                        src={recommendation.pokemon.sprites?.other?.['official-artwork']?.front_default || 
+                             recommendation.pokemon.sprites?.front_default || 
+                             '/placeholder-pokemon.png'}
+                        alt={recommendation.pokemon.name}
+                        fill
+                        sizes="48px"
+                        className="object-contain"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-gray-800 dark:text-white">
+                        {capitalizeFirstLetter(recommendation.pokemon.name)}
+                      </h4>
+                      <div className="flex gap-1 mt-1">
+                        {recommendation.pokemon.types.map((type) => {
+                          const backgroundColor = pokemonTypeColors[type.type.name] || '#68D391';
+                          const textColor = getTextColor(backgroundColor);
+                          return (
+                            <span
+                              key={type.type.name}
+                              className="px-2 py-0.5 rounded-full text-xs font-medium"
+                              style={{ 
+                                backgroundColor: backgroundColor,
+                                color: textColor
+                              }}
+                            >
+                              {capitalizeFirstLetter(type.type.name)}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="flex items-center mb-1">
+                        <span className="text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded">
+                          {recommendation.type === 'add' ? 'ADD' : 'SWAP'}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        Score: {recommendation.score}/100
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
+                    {recommendation.reason}
+                  </p>
+                  
+                  {recommendation.benefits.length > 0 && (
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      <div className="font-medium mb-1">Benefits:</div>
+                      <ul className="list-disc list-inside space-y-0.5">
+                        {recommendation.benefits.slice(0, 3).map((benefit, benefitIndex) => (
+                          <li key={benefitIndex}>{benefit}</li>
+                        ))}
+                        {recommendation.benefits.length > 3 && (
+                          <li>+{recommendation.benefits.length - 3} more...</li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {recommendation.type === 'swap' && recommendation.swapSlot !== undefined && (
+                    <div className="mt-2 text-xs bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 px-2 py-1 rounded">
+                      Will replace Pokemon in slot {recommendation.swapSlot + 1}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
