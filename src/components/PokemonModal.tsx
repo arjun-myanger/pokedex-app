@@ -297,6 +297,48 @@ export default function PokemonModal({ pokemon, onClose }: PokemonModalProps) {
               </div>
 
               <div>
+                <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white">Moves</h3>
+                {pokemon.moves && pokemon.moves.length > 0 ? (
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {pokemon.moves
+                        .filter(moveData => moveData.version_group_details.some(detail => detail.level_learned_at > 0))
+                        .sort((a, b) => {
+                          const aLevel = Math.min(...a.version_group_details.map(d => d.level_learned_at).filter(l => l > 0));
+                          const bLevel = Math.min(...b.version_group_details.map(d => d.level_learned_at).filter(l => l > 0));
+                          return aLevel - bLevel;
+                        })
+                        .slice(0, 10)
+                        .map((moveData, index) => {
+                          const minLevel = Math.min(...moveData.version_group_details.map(d => d.level_learned_at).filter(l => l > 0));
+                          return (
+                            <div key={index} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-2">
+                              <div className="flex items-center justify-between">
+                                <span className="font-medium text-gray-800 dark:text-white text-sm">
+                                  {capitalizeFirstLetter(moveData.move.name.replace('-', ' '))}
+                                </span>
+                                <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full">
+                                  Lv. {minLevel}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                    {pokemon.moves.length > 10 && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
+                        Showing first 10 level-up moves. This Pokémon can learn {pokemon.moves.length} total moves.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+                    <p className="text-sm">No move data available</p>
+                  </div>
+                )}
+              </div>
+
+              <div>
                 <h3 className="text-lg font-semibold mb-3 text-gray-800 dark:text-white">Where to Find</h3>
                 {locationLoading ? (
                   <div className="flex justify-center py-4">

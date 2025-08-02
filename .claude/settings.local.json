@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(taskkill:*)",
+      "Bash(powershell:*)",
+      "WebFetch(domain:pokeapi.co)"
+    ],
+    "deny": []
+  }
+}
